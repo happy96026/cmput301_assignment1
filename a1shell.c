@@ -2,46 +2,110 @@
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
+#include <limits.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/times.h>
 #include "error_handling.h"
+
+#define BUFSIZE 82
+
 
 void flush_stdin() {
 	char c;
 	while ((c != EOF)&&((c = getchar()) != '\n')) {}
 }
 
-void prompt(char *buf, int buf_size) {
+void get_line(char *buf) {
 	printf("a1shell%%");
-	fgets(buf, buf_size, stdin);
+	fgets(buf, BUFSIZE, stdin);
 	if (strchr(buf, '\n') == NULL) {
 		WARNING("command line is too long\n");
 		flush_stdin();
 	}
+	buf[strlen(buf) - 1] = '\0';
 }
 
-int get_no_of_args(char *buf) {
-	int args = 0;
+int get_arguments(char **args, char *line) {
 	char *token;
-	token = strtok(buf, " ");
+	int i = 1;
+
+	token = strtok(line, " ");
+	args[0] = token;
 	while (token != NULL) {
 		token = strtok(NULL, " ");
-		args++;
+		args[i] = token;
+		i++;
 	}
-	return args;
+
+	return (i - 1);
 }
 
-void cd_c() {
+void cd_c(char **args) {
+	if (chdir(args[1]) < 0) {
+		WARNING("chdir failed\n");
+	}
 }
 
 void pwd_c() {
-	printf("2\n");
+	char *ptr  = (char*) malloc(PATH_MAX);
+	if (ptr == NULL) {
+		FATAL("malloc failed");
+	}
+	if (getcwd(ptr, PATH_MAX) == NULL) {
+		WARNING("getcwd failed\n");
+	} else {
+		printf("%s\n", ptr);
+	}
+	free(ptr);
 }
 
 void umask_c() {
-	printf("3\n");
+	mode_t mask = umask(0);
+	umask(mask);
+	printf("current umask = %o, %d\n", mask, mask);
+	printf("S_IRWXU = %o, %d\n", S_IRWXU, S_IRWXU);
+	printf("S_IRWXG = %o, %d\n", S_IRWXG, S_IRWXG);
+	printf("S_IRWXO = %o, %d\n", S_IRWXO, S_IRWXO);
 }
 
 void done_c() {
-	printf("3\n");
+	exit(0);
+}
+
+void cmd(char **args, int no_args) {
+}
+
+void execute_commands(char **args, int no_args) {
+	if (strcmp(args[0], "cd") == 0) {
+		if (no_args < 2) {
+			WARNING("no path declared\n");
+		} else if (no_args > 2) {
+			WARNING("too many paths declared\n");
+		} else {
+			cd_c(args);
+		}
+	} else if (strcmp(args[0], "pwd") == 0) {
+		if (no_args > 1) {
+			WARNING("too many arguments\n");
+		} else {
+			pwd_c();
+		}
+	} else if (strcmp(args[0], "umask") == 0) {
+		if (no_args > 1) {
+			WARNING("too many arguments\n");
+		} else {
+			umask_c();
+		}
+	} else if (strcmp(args[0], "done") == 0) {
+		if (no_args > 1) {
+			WARNING("too many arguments\n");
+		} else {
+			done_c();
+		}
+	} else {
+		cmd(args, no_args);
+	}
 }
 
 void a1monitor() {
@@ -68,12 +132,13 @@ void a1monitor() {
 
 }
 
+
 int main(int argc, char **argv) {
 
-	int interval, args;
-	int buf_size = 82;
-	char buf[buf_size];
-	char *cmd;
+	char *line;
+	char **args;
+	int no_args;
+	int interval;
 
 	if (argc < 2) {
 		FATAL("not enough argument(s) (argc=%d)\n", argc);
@@ -84,38 +149,19 @@ int main(int argc, char **argv) {
 	} 
 
 	while (1) {
-		prompt(buf, buf_size);
-		buf[strlen(buf) - 1] = '\0';
-		args = get_no_of_args(buf);
-		cmd = strtok(buf, " ");
-		if (strcmp(cmd, "cd") == 0) {
-			if (args < 2) {
-				WARNING("no path declared\n");
-			} else if (args > 2) {
-				WARNING("too many paths declared\n");
-			} else {
-				cd_c();
-			}
-		} else if (strcmp(cmd, "pwd") == 0) {
-			if (args > 1) {
-				WARNING("too many arguments\n");
-			} else {
-				pwd_c();
-			}
-		} else if (strcmp(cmd, "umask") == 0) {
-			if (args > 1) {
-				WARNING("too many arguments\n");
-			} else {
-				umask_c();
-			}
-		} else if (strcmp(cmd, "done") == 0) {
-			if (args > 1) {
-				WARNING("too many arguments\n");
-			} else {
-				done_c();
-			}
-		} else {
-			//printf("5\n");
+		line = (char*) malloc(sizeof(char) * BUFSIZE);
+		args = (char**) malloc(sizeof(char*) * BUFSIZE);
+		if (line == NULL || args == NULL) {
+			FATAL("malloc failed");
 		}
+
+		get_line(line);
+		no_args = get_arguments(args, line);
+
+		execute_commands(args, no_args);
+
+		free(line);
+		free(args);
 	}
+
 }
