@@ -28,23 +28,41 @@ void get_line(char *buf) {
 
 int get_arguments(char **args, char *line) {
 	char *token;
-	int i = 1;
+	int i = 0;
 
 	token = strtok(line, " ");
-	args[0] = token;
 	while (token != NULL) {
-		token = strtok(NULL, " ");
 		args[i] = token;
 		i++;
+		token = strtok(NULL, " ");
 	}
 
-	return (i - 1);
+	return i;
 }
 
 void cd_c(char **args) {
-	if (chdir(args[1]) < 0) {
+	char *path = (char*) calloc(PATH_MAX, sizeof(char));
+	char *token, *env;
+	if (path == NULL) {
+		printf("malloc failed\n");
+	}
+
+	token = strtok(args[1], "%/");
+	while (token != NULL) {
+		if ((env = getenv(token)) == NULL) {
+			strcat(path, token);
+		} else {
+			strcat(path, env);
+		}
+		strcat(path, "/");
+		token = strtok(NULL, "/");
+	}
+
+	if (chdir(path) < 0) {
 		WARNING("chdir failed\n");
 	}
+	free(path);
+	path = NULL;
 }
 
 void pwd_c() {
@@ -73,7 +91,16 @@ void done_c() {
 	exit(0);
 }
 
-void cmd(char **args, int no_args) {
+void do_cmd(char **args, int no_args) {
+	struct tms tmsstart, tmsend;
+	clock_t start, end;
+	pid_t pid;
+
+	if ((start = times(&tmsstart)) == -1) {
+		FATAL("times failed");
+	}
+
+	
 }
 
 void execute_commands(char **args, int no_args) {
@@ -104,7 +131,7 @@ void execute_commands(char **args, int no_args) {
 			done_c();
 		}
 	} else {
-		cmd(args, no_args);
+		do_cmd(args, no_args);
 	}
 }
 
