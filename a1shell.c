@@ -4,9 +4,44 @@
 #include <string.h>
 #include "error_handling.h"
 
-void flush() {
+void flush_stdin() {
 	char c;
 	while ((c != EOF)&&((c = getchar()) != '\n')) {}
+}
+
+void prompt(char *buf, int buf_size) {
+	printf("a1shell%%");
+	fgets(buf, buf_size, stdin);
+	if (strchr(buf, '\n') == NULL) {
+		WARNING("command line is too long\n");
+		flush_stdin();
+	}
+}
+
+int get_no_of_args(char *buf) {
+	int args = 0;
+	char *token;
+	token = strtok(buf, " ");
+	while (token != NULL) {
+		token = strtok(NULL, " ");
+		args++;
+	}
+	return args;
+}
+
+void cd_c() {
+}
+
+void pwd_c() {
+	printf("2\n");
+}
+
+void umask_c() {
+	printf("3\n");
+}
+
+void done_c() {
+	printf("3\n");
 }
 
 void a1monitor() {
@@ -35,9 +70,10 @@ void a1monitor() {
 
 int main(int argc, char **argv) {
 
-	int interval;
+	int interval, args;
 	int buf_size = 82;
 	char buf[buf_size];
+	char *cmd;
 
 	if (argc < 2) {
 		FATAL("not enough argument(s) (argc=%d)\n", argc);
@@ -45,20 +81,41 @@ int main(int argc, char **argv) {
 		FATAL("too many argument(s) (argc=%d)\n", argc);
 	} else if ((interval = atoi(argv[1])) == 0) {
 		FATAL("not a valid argument\n");
-	} else {
-		while (1) {
-			printf("a1shell%%");
-			fgets(buf, buf_size, stdin);
-			if (strchr(buf, '\n') == NULL) {
-				WARNING("command line is too long\n");
-				flush();
-			} else if (strlen(buf) == 1) {
-				continue;
-			} else {
-				break;
-			}
-		}
-		//printf("hello");
-	}
+	} 
 
+	while (1) {
+		prompt(buf, buf_size);
+		buf[strlen(buf) - 1] = '\0';
+		args = get_no_of_args(buf);
+		cmd = strtok(buf, " ");
+		if (strcmp(cmd, "cd") == 0) {
+			if (args < 2) {
+				WARNING("no path declared\n");
+			} else if (args > 2) {
+				WARNING("too many paths declared\n");
+			} else {
+				cd_c();
+			}
+		} else if (strcmp(cmd, "pwd") == 0) {
+			if (args > 1) {
+				WARNING("too many arguments\n");
+			} else {
+				pwd_c();
+			}
+		} else if (strcmp(cmd, "umask") == 0) {
+			if (args > 1) {
+				WARNING("too many arguments\n");
+			} else {
+				umask_c();
+			}
+		} else if (strcmp(cmd, "done") == 0) {
+			if (args > 1) {
+				WARNING("too many arguments\n");
+			} else {
+				done_c();
+			}
+		} else {
+			//printf("5\n");
+		}
+	}
 }
