@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/times.h>
+#include <sys/wait.h>
 #include "error_handling.h"
 
 #define BUFSIZE 82
@@ -16,6 +17,7 @@ void flush_stdin() {
 	while ((c != EOF)&&((c = getchar()) != '\n')) {}
 }
 
+// Store input from stdin as string
 void get_line(char *buf) {
 	printf("a1shell%%");
 	fgets(buf, BUFSIZE, stdin);
@@ -26,11 +28,16 @@ void get_line(char *buf) {
 	buf[strlen(buf) - 1] = '\0';
 }
 
+// Store arguments that are separated by spaces into a
+// string array
 int get_arguments(char **args, char *line) {
 	char *token;
 	int i = 0;
 
-	token = strtok(line, " ");
+	char *copy = (char*) malloc(sizeof(char) * BUFSIZE);
+	strcpy(copy, line);
+
+	token = strtok(copy, " ");
 	while (token != NULL) {
 		args[i] = token;
 		i++;
@@ -40,6 +47,7 @@ int get_arguments(char **args, char *line) {
 	return i;
 }
 
+// Current Directory Command
 void cd_c(char **args) {
 	char *path = (char*) calloc(PATH_MAX, sizeof(char));
 	char *token, *env;
@@ -65,6 +73,7 @@ void cd_c(char **args) {
 	path = NULL;
 }
 
+// Print Working Directory Command
 void pwd_c() {
 	char *ptr  = (char*) malloc(PATH_MAX);
 	if (ptr == NULL) {
@@ -78,6 +87,7 @@ void pwd_c() {
 	free(ptr);
 }
 
+// Print Current User file creation MASK Command
 void umask_c() {
 	mode_t mask = umask(0);
 	umask(mask);
@@ -87,11 +97,28 @@ void umask_c() {
 	printf("S_IRWXO = %o, %d\n", S_IRWXO, S_IRWXO);
 }
 
+// Exitng a1shell Command
 void done_c() {
 	exit(0);
 }
 
-void do_cmd(char **args, int no_args) {
+// Display Process Time
+void disp_proc_time(clock_t start, clock_t end,
+					struct tms *tmsstart, struct tms *tmsend) {
+	static long clktck;
+	if ((clktck = sysconf(_SC_CLK_TCK)) < 0) {
+		FATAL("sysconf failed");
+	}
+
+	printf("time elapsed: %7.2f\n", (end-start) / (double)clktck);
+	printf("a1shell user: %7.2f\n", (tmsend->tms_utime  - tmsstart->tms_utime)  / (double)clktck);
+	printf("a1shell  sys: %7.2f\n", (tmsend->tms_stime  - tmsstart->tms_stime)  / (double)clktck);
+	printf("child 	user: %7.2f\n", (tmsend->tms_cutime - tmsstart->tms_cutime) / (double)clktck);
+	printf("child 	 sys: %7.2f\n", (tmsend->tms_cstime - tmsstart->tms_cstime) / (double)clktck);
+}
+
+// Run other commands in Bash
+void do_cmd(char *line) {
 	struct tms tmsstart, tmsend;
 	clock_t start, end;
 	pid_t pid;
@@ -100,10 +127,24 @@ void do_cmd(char **args, int no_args) {
 		FATAL("times failed");
 	}
 
-	
+	if ((pid = fork()) < 0) {
+		FATAL("fork failed");
+	} else if (pid == 0) { // Child Process
+		execl("/bin/bash", "bash", "-c", line, (char *) 0);
+		exit(0);
+	} else {			   // Parent Process
+		if (waitpid(pid, NULL, 0) != pid) {
+			FATAL("waitpid error");
+		}
+		if ((end = times(&tmsend)) == -1) {
+			FATAL("times failed");
+		}
+		disp_proc_time(start, end, &tmsstart, &tmsend);
+	}
 }
 
-void execute_commands(char **args, int no_args) {
+// Logic for executing different commands
+void execute_commands(char **args, int no_args, char *line) {
 	if (strcmp(args[0], "cd") == 0) {
 		if (no_args < 2) {
 			WARNING("no path declared\n");
@@ -131,7 +172,7 @@ void execute_commands(char **args, int no_args) {
 			done_c();
 		}
 	} else {
-		do_cmd(args, no_args);
+		do_cmd(line);
 	}
 }
 
@@ -162,10 +203,8 @@ void a1monitor() {
 
 int main(int argc, char **argv) {
 
-	char *line;
-	char **args;
-	int no_args;
-	int interval;
+	char *line, **args;
+	int no_args, interval;
 
 	if (argc < 2) {
 		FATAL("not enough argument(s) (argc=%d)\n", argc);
@@ -185,7 +224,7 @@ int main(int argc, char **argv) {
 		get_line(line);
 		no_args = get_arguments(args, line);
 
-		execute_commands(args, no_args);
+		execute_commands(args, no_args, line);
 
 		free(line);
 		free(args);

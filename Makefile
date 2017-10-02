@@ -1,11 +1,14 @@
 CC=gcc
+SRC=src
+ODIR=obj
+OUT=bin
 
-a1shell: error_handling.o a1shell.c
-	$(CC) -c a1shell.c
-	$(CC) -o a1shell a1shell.o error_handling.o
+$(OUT)/a1shell: $(ODIR)/error_handling.o $(SRC)/a1shell.c
+	$(CC) -c $(SRC)/a1shell.c -o $(ODIR)/a1shell.o
+	$(CC) -o $(OUT)/a1shell $(ODIR)/a1shell.o $(ODIR)/error_handling.o
 
-error_handling.o: error_handling.c
-	$(CC) -c error_handling.c
+$(ODIR)/error_handling.o: $(SRC)/error_handling.c
+	$(CC) -c $(SRC)/error_handling.c -o $(ODIR)/error_handling.o
 
 clean:
-	rm -rf *.o
+	rm -rf $(ODIR)/*.o
