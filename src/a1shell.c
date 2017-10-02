@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <sys/times.h>
 #include <sys/wait.h>
+#include <sys/resource.h>
 #include "error_handling.h"
 
 #define BUFSIZE 82
@@ -25,7 +26,9 @@ void get_line(char *buf) {
 		WARNING("command line is too long\n");
 		flush_stdin();
 	}
-	buf[strlen(buf) - 1] = '\0';
+	if (strlen(buf) > 1) {
+		buf[strlen(buf) - 1] = '\0';
+	}
 }
 
 // Store arguments that are separated by spaces into a
@@ -48,16 +51,22 @@ int get_arguments(char **args, char *line) {
 }
 
 // Current Directory Command
-void cd_c(char **args) {
+void cd_c(char *arg) {
 	char *path = (char*) calloc(PATH_MAX, sizeof(char));
 	char *token, *env;
 	if (path == NULL) {
 		printf("malloc failed\n");
 	}
+	if (arg[0] == '/') {
+		strcat(path, "/");
+	}
 
-	token = strtok(args[1], "%/");
+	token = strtok(arg, "%/");
 	while (token != NULL) {
-		if ((env = getenv(token)) == NULL) {
+		if (strcmp(token, "~") == 0) {
+			strcat(path, getenv("HOME"));
+		}
+		else if ((env = getenv(token)) == NULL) {
 			strcat(path, token);
 		} else {
 			strcat(path, env);
@@ -66,6 +75,7 @@ void cd_c(char **args) {
 		token = strtok(NULL, "/");
 	}
 
+	printf("%s\n", path);
 	if (chdir(path) < 0) {
 		WARNING("chdir failed\n");
 	}
@@ -146,12 +156,13 @@ void do_cmd(char *line) {
 // Logic for executing different commands
 void execute_commands(char **args, int no_args, char *line) {
 	if (strcmp(args[0], "cd") == 0) {
+		char home_str[] = "HOME";
 		if (no_args < 2) {
-			WARNING("no path declared\n");
+			cd_c(home_str);
 		} else if (no_args > 2) {
 			WARNING("too many paths declared\n");
 		} else {
-			cd_c(args);
+			cd_c(args[1]);
 		}
 	} else if (strcmp(args[0], "pwd") == 0) {
 		if (no_args > 1) {
@@ -192,7 +203,7 @@ void a1monitor() {
 		FATAL("fopen error (fp=%p)\n", fp);
 	} else {
 		fscanf(fp, "%s %s %s %s", load_avg0, load_avg1, load_avg2, processes);
-		printf("a1monitor: %s\n", buf);
+		printf("\na1monitor: %s\n", buf);
 		printf("           Load average: %s, %s, %s\n", load_avg0, load_avg1, load_avg2);
 		printf("           Processes: %s\n", processes);
 		fclose(fp);
@@ -205,6 +216,8 @@ int main(int argc, char **argv) {
 
 	char *line, **args;
 	int no_args, interval;
+	struct rlimit r;
+	pid_t pid;
 
 	if (argc < 2) {
 		FATAL("not enough argument(s) (argc=%d)\n", argc);
@@ -214,20 +227,35 @@ int main(int argc, char **argv) {
 		FATAL("not a valid argument\n");
 	} 
 
-	while (1) {
-		line = (char*) malloc(sizeof(char) * BUFSIZE);
-		args = (char**) malloc(sizeof(char*) * BUFSIZE);
-		if (line == NULL || args == NULL) {
-			FATAL("malloc failed");
+	// Set resource limit
+	r.rlim_cur = 500; // Soft limit
+	r.rlim_max = 600; // Hard limit
+	setrlimit(RLIMIT_CPU, &r);
+
+	if ((pid = fork()) < 0) {
+		FATAL("fork failed");
+	} else if (pid == 0) {
+		sleep(5);
+		while (kill(getppid(), 0) != -1) { // Kill process when parent process is killed
+			a1monitor();
+			sleep(interval);
 		}
+		exit(0);
+	} else {
+		while (1) {
+			line = (char*) malloc(sizeof(char) * BUFSIZE);
+			args = (char**) malloc(sizeof(char*) * BUFSIZE);
+			if (line == NULL || args == NULL) {
+				FATAL("malloc failed");
+			}
 
-		get_line(line);
-		no_args = get_arguments(args, line);
+			get_line(line);
+			no_args = get_arguments(args, line);
 
-		execute_commands(args, no_args, line);
+			execute_commands(args, no_args, line);
 
-		free(line);
-		free(args);
+			free(line);
+			free(args);
+		}
 	}
-
 }

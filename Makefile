@@ -8,7 +8,11 @@ $(OUT)/a1shell: $(ODIR)/error_handling.o $(SRC)/a1shell.c
 	$(CC) -o $(OUT)/a1shell $(ODIR)/a1shell.o $(ODIR)/error_handling.o
 
 $(ODIR)/error_handling.o: $(SRC)/error_handling.c
+	mkdir -p $(ODIR)
 	$(CC) -c $(SRC)/error_handling.c -o $(ODIR)/error_handling.o
 
 clean:
-	rm -rf $(ODIR)/*.o
+	rm -rf $(ODIR)
+
+tar:
+	tar -czvf assignment1.tar ./README.md ./bin/ ./src/ ./Makefile
