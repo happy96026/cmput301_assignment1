@@ -15,4 +15,4 @@ clean:
 	rm -rf $(ODIR)
 
 tar:
-	tar -czvf assignment1.tar ./README.md ./bin/ ./src/ ./Makefile
+	tar -czvf assignment1.tar ./README.md ./src/ ./bin/ ./Makefile

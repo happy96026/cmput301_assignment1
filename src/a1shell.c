@@ -75,7 +75,6 @@ void cd_c(char *arg) {
 		token = strtok(NULL, "/");
 	}
 
-	printf("%s\n", path);
 	if (chdir(path) < 0) {
 		WARNING("chdir failed\n");
 	}
